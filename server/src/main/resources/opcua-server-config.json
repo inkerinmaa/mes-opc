@@ -1,0 +1,68 @@
+{
+  "namespaces": [
+    {
+      "uri": "urn:example:factory:floor1",
+      "folderName": "Floor1",
+      "tags": [
+        {
+          "id": "Temperature",
+          "displayName": "Temperature (°C)",
+          "dataType": "Float",
+          "minValue": 20.0,
+          "maxValue": 80.0,
+          "updatePeriodMs": 1000
+        },
+        {
+          "id": "Pressure",
+          "displayName": "Pressure (hPa)",
+          "dataType": "Float",
+          "minValue": 98.0,
+          "maxValue": 110.0,
+          "updatePeriodMs": 2000
+        },
+        {
+          "id": "PartCounter",
+          "displayName": "Part Counter",
+          "dataType": "Int64",
+          "minValue": 0.0,
+          "maxValue": 1000000.0,
+          "updatePeriodMs": 500
+        },
+        {
+          "id": "MachineRunning",
+          "displayName": "Machine Running",
+          "dataType": "Boolean",
+          "updatePeriodMs": 5000
+        }
+      ]
+    },
+    {
+      "uri": "urn:example:factory:floor2",
+      "folderName": "Floor2",
+      "tags": [
+        {
+          "id": "Humidity",
+          "displayName": "Humidity (%RH)",
+          "dataType": "Float",
+          "minValue": 30.0,
+          "maxValue": 90.0,
+          "updatePeriodMs": 3000
+        },
+        {
+          "id": "MotorSpeed",
+          "displayName": "Motor Speed (RPM)",
+          "dataType": "Float",
+          "minValue": 0.0,
+          "maxValue": 3000.0,
+          "updatePeriodMs": 1000
+        },
+        {
+          "id": "AlarmActive",
+          "displayName": "Alarm Active",
+          "dataType": "Boolean",
+          "updatePeriodMs": 7000
+        }
+      ]
+    }
+  ]
+}

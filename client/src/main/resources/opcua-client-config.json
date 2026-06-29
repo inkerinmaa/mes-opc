@@ -1,0 +1,25 @@
+{
+  "_comment": "Client configuration. Two strategies: 'pollNamespaces' (timer-based reads) and 'subscribeNamespaces' (server-push). Leave 'tags' empty to auto-discover via OPC UA Browse.",
+
+  "pollNamespaces": [
+    {
+      "uri": "urn:example:factory:floor1",
+      "folderName": "Floor1",
+      "pollPeriodMs": 2000,
+      "tags": ["Temperature", "PartCounter"]
+    }
+  ],
+
+  "subscribeNamespaces": [
+    {
+      "uri": "urn:example:factory:floor1",
+      "folderName": "Floor1",
+      "tags": ["PartCounter"]
+    },
+    {
+      "uri": "urn:example:factory:floor2",
+      "folderName": "Floor2",
+      "tags": ["Humidity", "MotorSpeed", "AlarmActive"]
+    }
+  ]
+}

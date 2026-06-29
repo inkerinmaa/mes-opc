@@ -1,0 +1,43 @@
+services:
+    opc-server:
+        build:
+            context: ./server
+            dockerfile: Dockerfile
+        container_name: opc-server
+        ports:
+            - "4840:4840"
+        environment:
+            # Advertised hostname clients will connect to
+            OPCUA_SERVER_HOST: opc-server
+            OPCUA_SERVER_PORT: "4840"
+            QUARKUS_LOG_LEVEL: INFO
+        networks:
+            - opcua-net
+        healthcheck:
+            test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/4840"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            start_period: 15s
+
+    opc-client:
+        build:
+            context: ./client
+            dockerfile: Dockerfile
+        container_name: opc-client
+        depends_on:
+            opc-server:
+                condition: service_healthy
+        environment:
+            OPCUA_SERVER_URL: opc.tcp://opc-server:4840/
+            NATS_URL: nats://host.docker.internal:4222
+            QUARKUS_LOG_LEVEL: INFO
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        networks:
+            - opcua-net
+        restart: on-failure
+
+networks:
+    opcua-net:
+        driver: bridge
