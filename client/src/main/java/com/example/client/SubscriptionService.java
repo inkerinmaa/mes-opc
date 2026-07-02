@@ -12,7 +12,9 @@ import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * SUBSCRIPTION strategy — the server pushes value changes to the client.
@@ -49,6 +51,8 @@ public class SubscriptionService {
     @Inject NatsPublisherService natsPublisher;
 
     private OpcUaSubscription subscription;
+    // label (folderName/tagId) → NATS subject, built from tagMappings in config
+    private final Map<String, String> labelToSubject = new HashMap<>();
 
     /** Called by {@link OpcUaClientBean} once the connection and namespace indices are ready. */
     public void setupSubscriptions() {
@@ -66,8 +70,16 @@ public class SubscriptionService {
             System.out.println("[CLIENT][SUB] Subscription created");
 
             List<String> allLabels = new ArrayList<>();
+            labelToSubject.clear();
 
             for (ClientConfig.NamespaceConfig nsConfig : config.subscribeNamespaces) {
+                // Build label → NATS subject map from tagMappings in config
+                if (nsConfig.tagMappings != null) {
+                    for (var entry : nsConfig.tagMappings.entrySet()) {
+                        labelToSubject.put(nsConfig.folderName + "/" + entry.getKey(), entry.getValue());
+                    }
+                }
+
                 // Use explicit tag list, or discover via OPC UA Browse when list is empty
                 List<String> tags = (nsConfig.tags != null && !nsConfig.tags.isEmpty())
                         ? nsConfig.tags
@@ -120,12 +132,13 @@ public class SubscriptionService {
                 value.statusCode(),
                 value.serverTime());
 
-        // Publish PartCounter changes to NATS so the MES backend can track production
-        if ("Floor1/PartCounter".equals(label) && value.value().value() != null) {
+        // Publish to NATS if this label has a configured subject in tagMappings
+        String subject = labelToSubject.get(label);
+        if (subject != null && value.value().value() != null) {
             long counter = ((Number) value.value().value()).longValue();
             String payload = "{\"counter\":" + counter + "}";
-            natsPublisher.publish("opcua.floor1.PartCounter", payload);
-            System.out.printf("[CLIENT][NATS] → opcua.floor1.PartCounter  counter=%d%n", counter);
+            natsPublisher.publish(subject, payload);
+            System.out.printf("[CLIENT][NATS] → %s  counter=%d%n", subject, counter);
         }
     }
 }

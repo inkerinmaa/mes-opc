@@ -2,6 +2,7 @@ package com.example.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Maps {@code opcua-client-config.json} → Java objects.
@@ -58,5 +59,12 @@ public class ClientConfig {
          * Leave empty or omit to auto-discover all variable nodes via OPC UA Browse.
          */
         public List<String> tags;
+
+        /**
+         * Optional NATS publishing map: tagId → NATS subject.
+         * e.g. {@code {"PartCounter": "opcua.floor1.PartCounter"}}.
+         * Tags not in this map are logged but not published.
+         */
+        public Map<String, String> tagMappings;
     }
 }
