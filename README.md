@@ -4,6 +4,24 @@ Java 24 · Eclipse Milo 1.1.1 · Quarkus 3.27 LTS · Docker Compose
 
 ---
 
+## Environment setup
+
+Before first run, create a `.env` file from the example:
+
+```bash
+cp .env.example .env
+# Edit .env if your OPC UA server or NATS broker is at a different address
+```
+
+`.env` is git-ignored. Never commit it.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPCUA_SERVER_URL` | OPC UA endpoint the client connects to. In Docker Compose the server is reachable by service name. | `opc.tcp://opc-server:4840/` |
+| `NATS_URL` | NATS broker URL for publishing PartCounter values. `host.docker.internal` resolves to the host machine from inside Docker. | `nats://host.docker.internal:4222` |
+
+---
+
 ## Quick start
 
 ```bash

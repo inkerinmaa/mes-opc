@@ -1,3 +1,6 @@
+# Environment variables are loaded from .env (git-ignored).
+# Copy .env.example → .env and fill in values before first run.
+
 services:
     opc-server:
         build:
@@ -29,8 +32,8 @@ services:
             opc-server:
                 condition: service_healthy
         environment:
-            OPCUA_SERVER_URL: opc.tcp://opc-server:4840/
-            NATS_URL: nats://host.docker.internal:4222
+            OPCUA_SERVER_URL: ${OPCUA_SERVER_URL}
+            NATS_URL: ${NATS_URL}
             QUARKUS_LOG_LEVEL: INFO
         extra_hosts:
             - "host.docker.internal:host-gateway"
