@@ -134,20 +134,27 @@ public class SubscriptionService {
     // ── Callback ──────────────────────────────────────────────────────────
 
     private void onValueChange(String label, DataValue value) {
-        // value.value() → Variant, .value() → raw Java Object  (Milo 1.x record accessors)
-        System.out.printf("[CLIENT][SUB] %-30s = %-12s  (quality: %s, serverTime: %s)%n",
-                label,
-                value.value().value(),
-                value.statusCode(),
-                value.serverTime());
+        try {
+            Object raw = value.value().value();   // Milo 1.x: Variant.value()
+            System.out.printf("[CLIENT][SUB] %-30s = %-12s  (quality: %s, serverTime: %s)%n",
+                    label, raw, value.statusCode(), value.serverTime());
 
-        // Publish to NATS if this label has a configured subject in tagMappings
-        String subject = labelToSubject.get(label);
-        if (subject != null && value.value().value() != null) {
-            long counter = ((Number) value.value().value()).longValue();
-            String payload = "{\"counter\":" + counter + "}";
+            String subject = labelToSubject.get(label);
+            if (subject == null || raw == null) return;
+
+            String payload = "{\"value\":" + toJsonValue(raw) + "}";
             natsPublisher.publish(subject, payload);
-            System.out.printf("[CLIENT][NATS] → %s  counter=%d%n", subject, counter);
+            System.out.printf("[CLIENT][NATS] → %s  payload=%s%n", subject, payload);
+        } catch (Exception e) {
+            System.err.printf("[CLIENT][SUB] Error in callback for %s: %s%n", label, e.getMessage());
         }
+    }
+
+    /** Converts an OPC UA value to a JSON token (number, true/false, or "quoted string"). */
+    private static String toJsonValue(Object raw) {
+        if (raw instanceof Number)  return raw.toString();
+        if (raw instanceof Boolean) return raw.toString();
+        // String, DateTime, etc. — quote and escape
+        return "\"" + raw.toString().replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 }
