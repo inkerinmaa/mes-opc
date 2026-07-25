@@ -76,7 +76,7 @@ public class SubscriptionService {
                 // Build label → NATS subject map from tagMappings in config
                 if (nsConfig.tagMappings != null) {
                     for (var entry : nsConfig.tagMappings.entrySet()) {
-                        labelToSubject.put(nsConfig.folderName + "/" + entry.getKey(), entry.getValue());
+                        labelToSubject.put(tagLabel(nsConfig.folderName, entry.getKey()), entry.getValue());
                     }
                 }
 
@@ -89,12 +89,12 @@ public class SubscriptionService {
                         nsConfig.folderName, tags.size());
 
                 for (String tagId : tags) {
-                    var nodeId = clientBean.nodeId(nsConfig.uri, nsConfig.folderName + "/" + tagId);
+                    String identifier = tagLabel(nsConfig.folderName, tagId);
+                    var nodeId = clientBean.nodeId(nsConfig.uri, identifier);
                     var item   = OpcUaMonitoredItem.newDataItem(nodeId);
-                    String label = nsConfig.folderName + "/" + tagId;
-                    item.setDataValueListener((mi, v) -> onValueChange(label, v));
+                    item.setDataValueListener((mi, v) -> onValueChange(identifier, v));
                     subscription.addMonitoredItem(item);
-                    allLabels.add(label);
+                    allLabels.add(identifier);
                 }
             }
 
@@ -120,6 +120,15 @@ public class SubscriptionService {
         if (subscription != null) {
             try { subscription.delete(); } catch (Exception ignored) {}
         }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    /** Mirrors PollingService: omit folder prefix when folderName is blank. */
+    private static String tagLabel(String folderName, String tagId) {
+        return (folderName == null || folderName.isBlank())
+                ? tagId
+                : folderName + "/" + tagId;
     }
 
     // ── Callback ──────────────────────────────────────────────────────────
