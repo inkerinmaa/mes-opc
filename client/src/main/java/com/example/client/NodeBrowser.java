@@ -69,18 +69,20 @@ public class NodeBrowser {
                 uint(63)                          // resultMask: all result fields
         );
 
+        System.out.printf("[CLIENT][BROWSE] Start node: %s  (folderName='%s', uri='%s')%n",
+                folderId.toParseableString(), folderName, namespaceUri);
+
         List<String> tags = new ArrayList<>();
         try {
             var result = client.browse(bd);
             ReferenceDescription[] refs = result.getReferences();
             if (refs != null) {
                 for (ReferenceDescription ref : refs) {
-                    // BrowseName.name is the local part of the tag ID (no ns prefix)
-                    String tagId = ref.getBrowseName().getName();
+                    String tagId  = ref.getBrowseName().getName();
+                    String nodeId = ref.getNodeId().toParseableString();
                     tags.add(tagId);
-                    System.out.printf("[CLIENT][BROWSE] Discovered: %s/%s  (nodeId: %s)%n",
-                            folderName, tagId,
-                            ref.getNodeId().getIdentifier());
+                    System.out.printf("[CLIENT][BROWSE]   %-40s  nodeId=%-50s  browseName=%s%n",
+                            folderName + "/" + tagId, nodeId, ref.getBrowseName());
                 }
             }
         } catch (Exception e) {
