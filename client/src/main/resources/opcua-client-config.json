@@ -1,12 +1,18 @@
 {
-    "_comment": "Client configuration. Two strategies: 'pollNamespaces' (timer-based reads) and 'subscribeNamespaces' (server-push). Leave 'tags' empty to auto-discover via OPC UA Browse.",
+    "_comment": "Client configuration. Two strategies: 'pollNamespaces' (timer-based reads) and 'subscribeNamespaces' (server-push). Leave 'tags' empty to auto-discover all nodes via OPC UA Browse. Tags without an explicit tagMappings entry are published to opcua.<folderName.lower()>.<tagId> automatically.",
 
     "pollNamespaces": [
         {
             "uri": "urn:example:factory:floor1",
             "folderName": "Floor1",
             "pollPeriodMs": 2000,
-            "tags": ["Temperature", "PartCounter"]
+            "tags": []
+        },
+        {
+            "uri": "urn:example:factory:floor2",
+            "folderName": "Floor2",
+            "pollPeriodMs": 5000,
+            "tags": []
         }
     ],
 
@@ -14,10 +20,12 @@
         {
             "uri": "urn:example:factory:floor1",
             "folderName": "Floor1",
-            "tags": ["PartCounter"],
-            "tagMappings": {
-                "PartCounter": "opcua.floor1.PartCounter"
-            }
+            "tags": []
+        },
+        {
+            "uri": "urn:example:factory:floor2",
+            "folderName": "Floor2",
+            "tags": []
         }
     ]
 }

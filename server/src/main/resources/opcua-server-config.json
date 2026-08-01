@@ -61,6 +61,22 @@
           "displayName": "Alarm Active",
           "dataType": "Boolean",
           "updatePeriodMs": 7000
+        },
+        {
+          "id": "PartCounter",
+          "displayName": "Part Counter",
+          "dataType": "Int64",
+          "minValue": 0.0,
+          "maxValue": 1000000.0,
+          "updatePeriodMs": 500
+        },
+        {
+          "id": "Throughput",
+          "displayName": "Throughput (units/min)",
+          "dataType": "Float",
+          "minValue": 0.0,
+          "maxValue": 500.0,
+          "updatePeriodMs": 2000
         }
       ]
     }

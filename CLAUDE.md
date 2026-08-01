@@ -13,8 +13,7 @@ OPC UA industrial automation demo. The server simulates factory floor sensors (t
 - **Polling** — reads tags on a timer (every 2 s by default)
 - **Subscriptions** — server pushes changed values automatically
 
-The client also publishes `Floor1/PartCounter` (Int64, increments every 500 ms) to the
-DWH NATS broker on subject `opcua.floor1.PartCounter` as `{"counter":42}`.
+All subscribed tags are automatically published to NATS. The NATS subject is derived from the folder and tag name: `opcua.<folderName.toLowerCase()>.<tagId>` (e.g. `Floor1/Temperature` → `opcua.floor1.Temperature`). Explicit `tagMappings` in the config override the default for specific tags.
 
 All tags, namespaces, and update intervals are config-driven — no code changes needed to add/modify nodes.
 
@@ -110,15 +109,18 @@ docker exec -it nats-box nats pub opcua.floor1.PartCounter '{"counter":42}'
 ### Client (`opcua-client-config.json`)
 ```json
 {
-  "pollNamespaces":      [{ "uri": "...", "folderName": "Floor1", "pollPeriodMs": 2000, "tags": ["Temperature", "PartCounter"] }],
+  "pollNamespaces": [
+    { "uri": "...", "folderName": "Floor1", "pollPeriodMs": 2000, "tags": [] },
+    { "uri": "...", "folderName": "Floor2", "pollPeriodMs": 5000, "tags": [] }
+  ],
   "subscribeNamespaces": [
-    { "uri": "...", "folderName": "Floor1", "tags": ["PartCounter"] },
-    { "uri": "...", "folderName": "Floor2", "tags": ["Humidity", "MotorSpeed", "AlarmActive"] }
+    { "uri": "...", "folderName": "Floor1", "tags": [] },
+    { "uri": "...", "folderName": "Floor2", "tags": [] }
   ]
 }
 ```
 
-`Floor1/PartCounter` appears in both lists: polled every 2 s for visibility, and subscribed for server-push NATS publishing on every change.
+`tags: []` triggers OPC UA Browse to auto-discover all variable nodes under the folder. All discovered tags are subscribed and published to NATS with auto-derived subjects (`opcua.<folder>.<tag>`). Use explicit `tagMappings` only to override the subject for a specific tag.
 
 ### NATS_URL
 | Context | Value |
@@ -131,12 +133,26 @@ docker exec -it nats-box nats pub opcua.floor1.PartCounter '{"counter":42}'
 | Namespace URI | Folder | Tags |
 |--------------|--------|------|
 | `urn:example:factory:floor1` | Floor1 | Temperature, Pressure, PartCounter, MachineRunning |
-| `urn:example:factory:floor2` | Floor2 | Humidity, MotorSpeed, AlarmActive |
+| `urn:example:factory:floor2` | Floor2 | Humidity, MotorSpeed, AlarmActive, PartCounter, Throughput |
 
 ## NATS publishing
-| Subject | Source tag | Payload | Rate |
-|---------|-----------|---------|------|
-| `opcua.floor1.PartCounter` | Floor1/PartCounter | `{"counter":42}` | 500 ms |
+All subscribed tags are published automatically. Subject = `opcua.<folderName.toLowerCase()>.<tagId>`.
+
+| Subject | Payload | Rate |
+|---------|---------|------|
+| `opcua.floor1.Temperature` | `{"value":39.2}` | 1 s |
+| `opcua.floor1.Pressure` | `{"value":101.4}` | 2 s |
+| `opcua.floor1.PartCounter` | `{"value":402}` | 500 ms |
+| `opcua.floor1.MachineRunning` | `{"value":true}` | 5 s |
+| `opcua.floor2.Humidity` | `{"value":74.4}` | 3 s |
+| `opcua.floor2.MotorSpeed` | `{"value":2211.6}` | 1 s |
+| `opcua.floor2.AlarmActive` | `{"value":false}` | 7 s |
+| `opcua.floor2.PartCounter` | `{"value":402}` | 500 ms |
+| `opcua.floor2.Throughput` | `{"value":321.8}` | 2 s |
+
+Use explicit `tagMappings` in `subscribeNamespaces` to override the subject for a specific tag.
+
+**Tag name sanitization**: characters outside `[a-zA-Z0-9_-]` in a tag ID (dots, commas, spaces, etc.) are replaced with `_` in the derived NATS subject so they are not mistaken for NATS hierarchy separators. Example: `line_1.DB138.130,R` → `opcua.floor1.line_1_DB138_130_R`. The sanitization is in `SubscriptionService.sanitizeTag()`.
 
 ## External client access
 Connect any OPC UA client (UaExpert, Prosys OPC UA Browser) to:
@@ -144,9 +160,8 @@ Connect any OPC UA client (UaExpert, Prosys OPC UA Browser) to:
 No authentication or security is configured in this demo.
 
 ## Rules
-- Add new sensors by editing JSON config only — never hardcode tags in Java
+- Add new sensors by editing `opcua-server-config.json` and `opcua-client-config.json` only — no Java changes needed
 - `DynamicNamespace.java` handles all simulation logic; `SimulatedNamespace.java` is the legacy hardcoded reference — do not use it
 - The client retries connection on startup — server must be fully started first (Docker handles ordering via `depends_on`)
 - Use `mvn quarkus:dev` for development (live reload); use `docker compose up --build` for integration testing
-- NATS publishing is in `SubscriptionService.onValueChange` — detect label `"Floor1/PartCounter"` and call `natsPublisher.publish()`
-- To publish additional tags to NATS, add the same pattern in `onValueChange`
+- NATS topic derivation is in `SubscriptionService.deriveTopic()` — auto-derives `opcua.<folder>.<tag>`; override with `tagMappings` in config

@@ -139,15 +139,38 @@ public class SubscriptionService {
             System.out.printf("[CLIENT][SUB] %-30s = %-12s  (quality: %s, serverTime: %s)%n",
                     label, raw, value.statusCode(), value.serverTime());
 
-            String subject = labelToSubject.get(label);
-            if (subject == null || raw == null) return;
+            if (raw == null) return;
 
+            // Explicit mapping wins; fall back to auto-derived opcua.<folder>.<tag>
+            String subject = labelToSubject.getOrDefault(label, deriveTopic(label));
             String payload = "{\"value\":" + toJsonValue(raw) + "}";
             natsPublisher.publish(subject, payload);
             System.out.printf("[CLIENT][NATS] → %s  payload=%s%n", subject, payload);
         } catch (Exception e) {
             System.err.printf("[CLIENT][SUB] Error in callback for %s: %s%n", label, e.getMessage());
         }
+    }
+
+    /**
+     * Derives a NATS subject from the OPC UA label.
+     * "Floor1/PartCounter"        → "opcua.floor1.PartCounter"
+     * "Floor2/Humidity"           → "opcua.floor2.Humidity"
+     * "Floor1/line_1.DB138.130,R" → "opcua.floor1.line_1_DB138_130_R"
+     *
+     * Dots, commas, spaces and other NATS-reserved characters in the tag segment
+     * are replaced with underscores so they are not mistaken for subject separators.
+     */
+    private static String deriveTopic(String label) {
+        int sep = label.indexOf('/');
+        if (sep < 0) return "opcua." + sanitizeTag(label);
+        String folder = label.substring(0, sep).toLowerCase();
+        String tag    = sanitizeTag(label.substring(sep + 1));
+        return "opcua." + folder + "." + tag;
+    }
+
+    /** Replace any character that is not a safe NATS token char with '_'. */
+    private static String sanitizeTag(String tag) {
+        return tag.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 
     /** Converts an OPC UA value to a JSON token (number, true/false, or "quoted string"). */

@@ -126,25 +126,36 @@ client config leaves the `tags` list empty.
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Docker network: opcua-net                                        │
-│                                                                   │
-│  ┌───────────────────────┐        ┌──────────────────────────┐   │
-│  │      opc-server       │        │       opc-client          │   │
-│  │      port 4840        │        │                           │   │
-│  │                       │        │  POLLING (timer)          │   │
-│  │  Namespace Floor1     │◄──────►│    Floor1/Temperature     │   │
-│  │    Temperature (1 s)  │        │    Floor1/PartCounter     │   │
-│  │    Pressure    (2 s)  │        │    (every 2 s)            │   │
-│  │    PartCounter (500ms)│        │                           │   │
-│  │    MachineRunning(5s) │        │  SUBSCRIPTION (push)      │   │
-│  │                       │        │    Floor2/Humidity        │   │
-│  │  Namespace Floor2     │        │    Floor2/MotorSpeed       │   │
-│  │    Humidity    (3 s)  │        │    Floor2/AlarmActive     │   │
-│  │    MotorSpeed  (1 s)  │        │    (server-push)          │   │
-│  │    AlarmActive (7 s)  │        │                           │   │
-│  └───────────────────────┘        └──────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Docker network: opcua-net                                                   │
+│                                                                              │
+│  ┌───────────────────────┐         ┌───────────────────────────┐            │
+│  │      opc-server       │         │        opc-client          │            │
+│  │      port 4840        │         │                            │            │
+│  │                       │         │  SUBSCRIPTION (all tags)   │            │
+│  │  Namespace Floor1     │◄───────►│    Browse → all Floor1 &  │            │
+│  │    Temperature (1 s)  │         │    Floor2 tags discovered  │            │
+│  │    Pressure    (2 s)  │         │    automatically           │            │
+│  │    PartCounter (500ms)│         │                            │            │
+│  │    MachineRunning(5s) │         │  POLLING (timer, optional) │            │
+│  │                       │         │    configurable per-ns     │            │
+│  │  Namespace Floor2     │         │                            │            │
+│  │    Humidity    (3 s)  │         └──────────────┬────────────┘            │
+│  │    MotorSpeed  (1 s)  │                        │ publish opcua.<f>.<tag>  │
+│  │    AlarmActive (7 s)  │                        ▼                          │
+│  │    PartCounter (500ms)│         ┌────────────────────────┐               │
+│  │    Throughput  (2 s)  │         │         NATS            │               │
+│  └───────────────────────┘         │  opcua.floor1.*        │               │
+│                                    │  opcua.floor2.*        │               │
+└────────────────────────────────────┴────────────┬───────────┴───────────────┘
+                                                   │
+                    ┌──────────────────────────────┼──────────────────────┐
+                    │                              │                       │
+                    ▼                              ▼                       │
+          MES backend                    nats-historian (mes-dwh)          │
+          NatsOpcCounterService          historian.opcua_tags              │
+          (PartCounter → order           (all tags, ClickHouse,            │
+           produced count)               Grafana-ready)                    │
 ```
 
 ---
@@ -450,23 +461,45 @@ OpcUaClientBean.onStart()
 
 ## NATS publishing
 
-The client subscribes to `Floor1/PartCounter` via OPC UA subscription (server-push)
-and publishes each value change to NATS:
+Every subscribed tag is published to NATS automatically. The subject is derived from the folder name and tag ID:
 
-| Subject | Payload | Rate |
-|---------|---------|------|
-| `opcua.floor1.PartCounter` | `{"counter":42}` | every 500 ms |
+```
+opcua.<folderName.toLowerCase()>.<tagId>
+```
 
-The MES backend (`NatsOpcCounterService`) subscribes to this subject and adds
-the delta to the running Wired Matts order's produced count in real time.
+Tag IDs containing special characters (dots, commas, spaces) are sanitized — any character outside `[a-zA-Z0-9_-]` is replaced with `_`. For example, `line_1.DB138.130,R` under `Floor1` → `opcua.floor1.line_1_DB138_130_R`.
+
+Use `tagMappings` in `opcua-client-config.json` to override the subject for a specific tag.
+
+### Current subjects
+
+| Subject | Payload | Rate | Notes |
+|---------|---------|------|-------|
+| `opcua.floor1.Temperature` | `{"value":39.2}` | 1 s | Float |
+| `opcua.floor1.Pressure` | `{"value":101.4}` | 2 s | Float |
+| `opcua.floor1.PartCounter` | `{"value":402}` | 500 ms | Int64 counter |
+| `opcua.floor1.MachineRunning` | `{"value":true}` | 5 s | Boolean |
+| `opcua.floor2.Humidity` | `{"value":74.4}` | 3 s | Float |
+| `opcua.floor2.MotorSpeed` | `{"value":2211.6}` | 1 s | Float |
+| `opcua.floor2.AlarmActive` | `{"value":false}` | 7 s | Boolean |
+| `opcua.floor2.PartCounter` | `{"value":402}` | 500 ms | Int64 counter |
+| `opcua.floor2.Throughput` | `{"value":321.8}` | 2 s | Float |
+
+### Downstream consumers
+
+| Consumer | Subject(s) | What it does |
+|---|---|---|
+| MES backend `NatsOpcCounterService` | `opcua.floor1.PartCounter` | Adds delta to Wired Matts order produced count |
+| `nats-historian` (mes-dwh) | `opcua.floor1.*`, `opcua.floor2.*` | Stores all tag values to ClickHouse `historian.opcua_tags` |
 
 ### Test commands
 
-Verify the stream is flowing (requires the DWH NATS stack to be running):
-
 ```bash
-# Subscribe and watch counter values arrive (Ctrl-C to stop)
-docker exec -it nats-box nats sub opcua.floor1.PartCounter
+# Watch all floor1 tags in real time (Ctrl-C to stop)
+docker exec -it nats-box nats sub 'opcua.floor1.*'
+
+# Watch a specific tag
+docker exec -it nats-box nats sub opcua.floor1.Temperature
 
 # Check NATS monitoring UI
 open http://localhost:8222
@@ -474,11 +507,14 @@ open http://localhost:8222
 
 Expected output in nats-box:
 ```
-[#1] Received on "opcua.floor1.PartCounter"
-{"counter":1}
+[#1] Received on "opcua.floor1.Temperature"
+{"value":47.31}
 
 [#2] Received on "opcua.floor1.PartCounter"
-{"counter":2}
+{"value":3}
+
+[#3] Received on "opcua.floor2.AlarmActive"
+{"value":false}
 ```
 
 ### NATS_URL configuration
