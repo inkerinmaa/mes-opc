@@ -37,6 +37,18 @@ import static org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.Unsigned.
  *   <li>Result mask — bitmask 63 = all fields (NodeId, BrowseName, DisplayName, …)</li>
  * </ul>
  *
+ * <h3>folderName format</h3>
+ * <ul>
+ *   <li>{@code "Floor1"}  → string NodeId {@code ns=X;s=Floor1}</li>
+ *   <li>{@code "i=6"}     → numeric NodeId {@code ns=X;i=6}  (use when the OPC UA browser
+ *       shows a numeric id for the folder node)</li>
+ * </ul>
+ *
+ * <h3>Return value</h3>
+ * Returns the actual {@link NodeId} objects discovered — not just browse names or identifier
+ * strings.  This preserves the exact NodeId type (string vs numeric) so callers can subscribe
+ * or read without rebuilding and potentially getting the type wrong.
+ *
  * <h3>Usage</h3>
  * {@link PollingService} and {@link SubscriptionService} call this when the
  * {@code tags} list in a namespace config is empty, letting the client adapt
@@ -49,40 +61,42 @@ public class NodeBrowser {
     OpcUaClientBean clientBean;
 
     /**
-     * Returns the browse-names of all Variable nodes directly under a folder.
+     * Returns NodeIds of all Variable nodes directly under a folder.
      *
      * @param namespaceUri namespace URI (must be in client config so the index is known)
-     * @param folderName   folder node string identifier, e.g. {@code "Floor1"}
-     * @return             list of tag IDs, e.g. {@code ["Temperature", "Pressure"]}
+     * @param folderName   folder node identifier — {@code "Floor1"} for string NodeId,
+     *                     {@code "i=6"} for numeric NodeId
+     * @return             list of exact NodeIds ready for subscription or read
      */
-    public List<String> browseTagIds(String namespaceUri, String folderName) {
-        OpcUaClient client    = clientBean.getClient();
-        NodeId      folderId  = clientBean.nodeId(namespaceUri, folderName);
-
-        // OPC UA spec: NodeClass.Variable = 2; BrowseResultMask 63 = all fields
-        BrowseDescription bd = new BrowseDescription(
-                folderId,
-                BrowseDirection.Forward,
-                NodeIds.HierarchicalReferences,   // follow Organizes / HasComponent / …
-                true,                             // includeSubtypes of HierarchicalReferences
-                uint(NodeClass.Variable.getValue()),  // nodeClassMask: Variable nodes only
-                uint(63)                          // resultMask: all result fields
-        );
+    public List<NodeId> browseNodeIds(String namespaceUri, String folderName) {
+        OpcUaClient client   = clientBean.getClient();
+        NodeId      folderId = clientBean.nodeId(namespaceUri, folderName);
 
         System.out.printf("[CLIENT][BROWSE] Start node: %s  (folderName='%s', uri='%s')%n",
                 folderId.toParseableString(), folderName, namespaceUri);
 
-        List<String> tags = new ArrayList<>();
+        BrowseDescription bd = new BrowseDescription(
+                folderId,
+                BrowseDirection.Forward,
+                NodeIds.HierarchicalReferences,
+                true,
+                uint(NodeClass.Variable.getValue()),
+                uint(63)
+        );
+
+        List<NodeId> result = new ArrayList<>();
         try {
-            var result = client.browse(bd);
-            ReferenceDescription[] refs = result.getReferences();
+            var browseResult = client.browse(bd);
+            ReferenceDescription[] refs = browseResult.getReferences();
             if (refs != null) {
                 for (ReferenceDescription ref : refs) {
-                    String tagId  = ref.getBrowseName().getName();
-                    String nodeId = ref.getNodeId().toParseableString();
-                    tags.add(tagId);
-                    System.out.printf("[CLIENT][BROWSE]   %-40s  nodeId=%-50s  browseName=%s%n",
-                            folderName + "/" + tagId, nodeId, ref.getBrowseName());
+                    NodeId nodeId = ref.getNodeId()
+                            .toNodeId(client.getNamespaceTable())
+                            .orElse(null);
+                    if (nodeId == null) continue;
+                    result.add(nodeId);
+                    System.out.printf("[CLIENT][BROWSE]   %-40s  nodeId=%s%n",
+                            ref.getBrowseName().getName(), nodeId.toParseableString());
                 }
             }
         } catch (Exception e) {
@@ -90,7 +104,7 @@ public class NodeBrowser {
                     folderName, namespaceUri, e.getMessage());
         }
 
-        System.out.printf("[CLIENT][BROWSE] %s → %d tag(s) discovered%n", folderName, tags.size());
-        return tags;
+        System.out.printf("[CLIENT][BROWSE] %s → %d tag(s) discovered%n", folderName, result.size());
+        return result;
     }
 }

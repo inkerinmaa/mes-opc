@@ -10,6 +10,7 @@ import org.eclipse.milo.opcua.sdk.client.subscriptions.MonitoredItemSynchronizat
 import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem;
 import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
+import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -80,21 +81,33 @@ public class SubscriptionService {
                     }
                 }
 
-                // Use explicit tag list, or discover via OPC UA Browse when list is empty
-                List<String> tags = (nsConfig.tags != null && !nsConfig.tags.isEmpty())
-                        ? nsConfig.tags
-                        : browser.browseTagIds(nsConfig.uri, nsConfig.folderName);
-
-                System.out.printf("[CLIENT][SUB] Subscribing '%s': %d tag(s)%n",
-                        nsConfig.folderName, tags.size());
-
-                for (String tagId : tags) {
-                    String identifier = tagLabel(nsConfig.folderName, tagId);
-                    var nodeId = clientBean.nodeId(nsConfig.uri, identifier);
-                    var item   = OpcUaMonitoredItem.newDataItem(nodeId);
-                    item.setDataValueListener((mi, v) -> onValueChange(identifier, v));
-                    subscription.addMonitoredItem(item);
-                    allLabels.add(identifier);
+                if (nsConfig.tags != null && !nsConfig.tags.isEmpty()) {
+                    // Explicit tag list — build NodeId from folderName+tagId string
+                    System.out.printf("[CLIENT][SUB] Subscribing '%s': %d tag(s) (explicit)%n",
+                            nsConfig.folderName, nsConfig.tags.size());
+                    for (String tagId : nsConfig.tags) {
+                        String identifier = tagLabel(nsConfig.folderName, tagId);
+                        var nodeId = clientBean.nodeId(nsConfig.uri, identifier);
+                        var item   = OpcUaMonitoredItem.newDataItem(nodeId);
+                        item.setDataValueListener((mi, v) -> onValueChange(identifier, v));
+                        subscription.addMonitoredItem(item);
+                        allLabels.add(identifier);
+                    }
+                } else {
+                    // Auto-discover via OPC UA Browse.
+                    // Uses discovered NodeIds directly — preserves numeric vs string type.
+                    // folderName supports "i=6" for numeric folder NodeIds.
+                    List<NodeId> discovered = browser.browseNodeIds(nsConfig.uri, nsConfig.folderName);
+                    System.out.printf("[CLIENT][SUB] Subscribing '%s': %d tag(s) (discovered)%n",
+                            nsConfig.folderName, discovered.size());
+                    for (NodeId nodeId : discovered) {
+                        String tagId      = nodeId.getIdentifier().toString();
+                        String identifier = tagLabel(nsConfig.folderName, tagId);
+                        var item = OpcUaMonitoredItem.newDataItem(nodeId);
+                        item.setDataValueListener((mi, v) -> onValueChange(identifier, v));
+                        subscription.addMonitoredItem(item);
+                        allLabels.add(identifier);
+                    }
                 }
             }
 

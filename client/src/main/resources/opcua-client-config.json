@@ -1,31 +1,24 @@
 {
     "_comment": "Client configuration. Two strategies: 'pollNamespaces' (timer-based reads) and 'subscribeNamespaces' (server-push). Leave 'tags' empty to auto-discover all nodes via OPC UA Browse. Tags without an explicit tagMappings entry are published to opcua.<folderName.lower()>.<tagId> automatically.",
 
-    "pollNamespaces": [
-        {
-            "uri": "urn:example:factory:floor1",
-            "folderName": "Floor1",
-            "pollPeriodMs": 2000,
-            "tags": []
-        },
-        {
-            "uri": "urn:example:factory:floor2",
-            "folderName": "Floor2",
-            "pollPeriodMs": 5000,
-            "tags": []
-        }
-    ],
+    "pollNamespaces": [],
 
     "subscribeNamespaces": [
         {
-            "uri": "urn:example:factory:floor1",
-            "folderName": "Floor1",
-            "tags": []
+            "uri": "urn:mpsopcuaserver:application",
+            "folderName": "i=6",
+            "tags": [],
+            "tagsMappings": {
+              "TestTag": "opcua"
+            }
         },
         {
-            "uri": "urn:example:factory:floor2",
+            "uri": "S7:",
             "folderName": "Floor2",
-            "tags": []
+            "tags": [],
+            "tagsMappings": {
+              "TestTag": "opcua.line1.PartCounter"
+            }
         }
     ]
 }

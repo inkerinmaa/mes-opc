@@ -304,9 +304,10 @@ nodes under the folder automatically:
 }
 ```
 
-`NodeBrowser.browseTagIds()` sends a Browse request asking for all Variable-class
-nodes under the folder, then returns their browse names. This lets you add tags to
-the server config without changing the client config.
+`NodeBrowser.browseNodeIds()` sends a Browse request asking for all Variable-class
+nodes under the folder and returns their exact `NodeId` objects (preserving numeric
+vs string type). This lets you add tags to the server config without changing the
+client config.
 
 ---
 

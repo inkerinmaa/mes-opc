@@ -13,6 +13,7 @@ import org.eclipse.milo.opcua.stack.core.NodeIds;
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy;
 import org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText;
 import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId;
+import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger;
 import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn;
 
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Manages the OpcUaClient lifecycle and namespace index resolution.
@@ -133,16 +135,29 @@ public class OpcUaClientBean {
      * Build a NodeId in the given namespace.
      *
      * @param namespaceUri namespace URI (must be present in client config)
-     * @param identifier   string identifier, e.g. {@code "Floor1/Temperature"}
+     * @param identifier   string identifier, e.g. {@code "Floor1/Temperature"};
+     *                     or {@code "i=6"} to create a numeric NodeId
      */
     public NodeId nodeId(String namespaceUri, String identifier) {
         Integer idx = namespaceIndices.get(namespaceUri);
         if (idx == null) throw new IllegalArgumentException(
                 "Namespace not configured: " + namespaceUri);
+        if (identifier.startsWith("i=")) {
+            return new NodeId(idx, UInteger.valueOf(Long.parseLong(identifier.substring(2))));
+        }
         return new NodeId(idx, identifier);
     }
 
     // ── Private helpers ────────────────────────────────────────────────────
+
+   private int getNameSpaceIndex(string namespaceUri) {
+       Integer idx = namespaceIndices.get(namespaceUri);
+       if (idx == null) {
+           throw new IllegalArgumentException("Unknown namespace URI: " + namespaceUri);
+       }
+       return idx;
+   }
+
 
     private void connectWithRetry() throws Exception {
         Exception last = null;
